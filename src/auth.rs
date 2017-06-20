@@ -8,7 +8,7 @@ use reqwest::header::*;
 #[derive(Debug)]
 pub struct Auth {
     token: String,
-    expiry_time: time::Tm,
+    expiry_time: i64,
 }
 
 const CSRF: &str = "csrf_token";
@@ -133,8 +133,7 @@ impl Auth {
                     (Some(e), Some(t)) => {
                         Some(Auth {
                                  token: t.to_owned(),
-                                 expiry_time: time::now() +
-                                              time::Duration::seconds(e.parse().unwrap()),
+                                 expiry_time: time::get_time().sec + e.parse::<i64>().unwrap(),
                              })
                     }
                     _ => None,
@@ -144,6 +143,6 @@ impl Auth {
     }
 
     pub fn is_valid(&self) -> bool {
-        self.expiry_time > time::now()
+        self.expiry_time > time::get_time().sec
     }
 }
