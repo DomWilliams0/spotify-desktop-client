@@ -1,6 +1,7 @@
 use time;
 
 use url;
+use error::*;
 use reqwest::*;
 use reqwest::header::*;
 
@@ -22,20 +23,27 @@ fn extract_from_flattened_list<'a>(src: &'a str, key: &str, sep: char) -> Option
     None
 }
 
-fn extract_cookie_value<'a>(response: &'a Response, key: &str) -> Option<&'a str> {
-    let &SetCookie(ref values) = response.headers().get::<SetCookie>().unwrap();
-    values
-        .iter()
-        .find(|&x| x.starts_with(key))
-        .and_then(|c| extract_from_flattened_list(c, key, ';'))
+fn extract_cookie_value<'a>(response: &'a Response, key: &str) -> SpotifyResult<&'a str> {
+    //    let &SetCookie(ref values) = response.headers().get::<SetCookie>()
+    response
+        .headers()
+        .get::<SetCookie>()
+        .and_then(|&SetCookie(ref values)| {
+                      values
+                          .iter()
+                          .find(|&x| x.starts_with(key))
+                          .and_then(|c| extract_from_flattened_list(c, key, ';'))
+                  })
+        .ok_or_else(|| SpotifyError::AuthMissingCookie(key.to_owned()))
+
 }
 
-fn create_cookie(pairs: Vec<(&str, &str)>) -> Cookie {
+fn create_cookie(pairs: &Vec<(&str, &str)>) -> Cookie {
     Cookie(pairs.iter().map(|&(k, v)| format!("{}={}", k, v)).collect())
 }
 
 impl Auth {
-    pub fn new(client: &Client, username: &str, password: &str) -> Option<Auth> {
+    pub fn new(client: &Client, username: &str, password: &str) -> SpotifyResult<Auth> {
         const AUTHORIZE: &str = "https://accounts.spotify.com/authorize?";
         const LOGIN: &str = "https://accounts.spotify.com/api/login";
         const ACCEPT: &str = "https://accounts.spotify.com/en/authorize/accept";
@@ -60,26 +68,25 @@ impl Auth {
         };
 
         let original_url = url::form_urlencoded::Serializer::new(String::from(AUTHORIZE))
-            .extend_pairs(query_params.iter())
+            .extend_pairs(&query_params)
             .finish();
-        println!("Sending original GET to /authorize");
+        println!("Sending GET to /authorize");
         let resp = client
             .get(original_url.as_str())
             .headers(headers.clone())
-            .send()
-            .unwrap();
+            .send()?;
 
-        let csrf = extract_cookie_value(&resp, CSRF).unwrap();
+        let csrf = extract_cookie_value(&resp, CSRF)?;
 
         let login_data = vec![("remember", "false"),
                               ("username", username),
                               ("password", password),
                               ("csrf_token", csrf)];
-        let login_cookies = create_cookie(vec![(CSRF, csrf),
-                                               ("__bon",
-                                                "MHwwfDYyODMzMzc0OHwyNjM5MDAxNzQxNnwxfDF8MXww"),
-                                               ("fb_continue", &original_url),
-                                               ("remember", username)]);
+        let login_cookies = create_cookie(&vec![(CSRF, csrf),
+                                                ("__bon",
+                                                 "MHwwfDYyODMzMzc0OHwyNjM5MDAxNzQxNnwxfDF8MXww"),
+                                                ("fb_continue", &original_url),
+                                                ("remember", username)]);
 
         headers.set(Referer(original_url.clone()));
         headers.set(login_cookies);
@@ -89,34 +96,32 @@ impl Auth {
             .post(LOGIN)
             .headers(headers.clone())
             .form(&login_data)
-            .send()
-            .unwrap();
+            .send()?;
 
         if !resp.status().is_success() {
-            return None;
+            return Err(SpotifyError::AuthBadCreds);
         }
 
         println!("Authenticated!");
 
-        let csrf = extract_cookie_value(&resp, CSRF).unwrap();
+        let csrf = extract_cookie_value(&resp, CSRF)?;
         let accept_data = {
             let mut pairs = query_params;
             pairs.push((CSRF, csrf.to_owned()));
             pairs
         };
-        let accept_cookies =
-            create_cookie(vec![("sp_ac", extract_cookie_value(&resp, "sp_ac").unwrap()),
-                               ("sp_dc", extract_cookie_value(&resp, "sp_dc").unwrap()),
-                               (CSRF, extract_cookie_value(&resp, CSRF).unwrap())]);
+        let accept_cookies = create_cookie(&vec![("sp_ac", extract_cookie_value(&resp, "sp_ac")?),
+                                                 ("sp_dc", extract_cookie_value(&resp, "sp_dc")?),
+                                                 (CSRF, extract_cookie_value(&resp, CSRF)?)]);
         headers.remove::<Cookie>();
         headers.set(accept_cookies);
+
         println!("Sending POST to /accept");
         let resp = client
             .post(ACCEPT)
             .headers(headers)
             .form(&accept_data)
-            .send()
-            .unwrap();
+            .send()?;
 
         resp.headers()
             .get::<Location>()
@@ -135,6 +140,7 @@ impl Auth {
                     _ => None,
                 }
             })
+            .ok_or(SpotifyError::AuthFailedAccept)
     }
 
     pub fn is_valid(&self) -> bool {

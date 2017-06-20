@@ -19,8 +19,14 @@ impl Spotify {
     }
 
     pub fn authenticate(&mut self, username: &str, password: &str) {
-        self.auth = Auth::new(&self.client, username, password);
-        //        println!("{:?}", self.auth);
+        self.auth = match Auth::new(&self.client, username, password) {
+            Ok(a) => Some(a),
+            Err(e) => {
+                println!("Failed to authenticate: {:?}", e);
+                None
+            }
+        };
+        println!("{:?}", self.auth);
     }
 
     fn authenticated(&self) -> bool {

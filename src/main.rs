@@ -4,6 +4,7 @@ extern crate url;
 
 mod spotify;
 mod auth;
+mod error;
 
 use spotify::Spotify;
 
