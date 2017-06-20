@@ -3,6 +3,7 @@ extern crate reqwest;
 extern crate url;
 
 mod spotify;
+mod auth;
 
 use spotify::Spotify;
 
