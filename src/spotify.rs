@@ -1,5 +1,8 @@
 use reqwest::{RedirectPolicy, Client};
 use auth::Auth;
+use std::env;
+use std::path::PathBuf;
+use std::fs;
 
 pub struct Spotify {
     client: Client,
@@ -14,9 +17,23 @@ impl Spotify {
             c
         };
 
+        let mut auth = Auth::new(username, password);
+
+        for _ in 0..3 {
+            println!("{:?}", auth.token(&client));
+        }
+
         Spotify {
             client: client,
-            auth: Auth::new(username, password),
+            auth: auth,
         }
     }
+}
+
+pub fn config_dir() -> PathBuf {
+    let mut p = PathBuf::from(env::var("XDG_CONFIG_HOME")
+                                  .unwrap_or_else(|_| env::var("HOME").unwrap()));
+    p.push("spotify_fun");
+    fs::create_dir_all(&p);
+    p
 }

@@ -1,11 +1,16 @@
 use time;
 
+use std::path::PathBuf;
+use std::fs;
+use std::io::{Read, Write};
 use url;
 use error::*;
 use reqwest::*;
 use reqwest::header::*;
+use spotify;
+use toml;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AuthState {
     token: String,
     expiry_time: i64,
@@ -77,15 +82,17 @@ impl Auth {
 
 
     fn ensure_state(&mut self, http_client: &Client) {
-
+        // TODO dont ignore errors completely
         if !self.is_state_valid() {
             // try to load from file
-            self.state = Auth::load();
+            self.state = Auth::load().ok();
             if !self.is_state_valid() {
                 // authorise again
-                self.state = Auth::authorise(&self.creds, http_client).ok(); // TODO log error
+                self.state = Auth::authorise(&self.creds, http_client).ok();
             }
         }
+
+        self.save();
     }
 
 
@@ -188,11 +195,27 @@ impl Auth {
             .ok_or(SpotifyError::AuthFailedAccept)
     }
 
-    fn save(&self) {}
+    fn state_path() -> PathBuf {
+        const STATE_FILE: &str = "state.yml";
+        let mut path = spotify::config_dir();
+        path.push(STATE_FILE);
+        path
+    }
 
-    fn load() -> Option<AuthState> {
-        println!("Trying to load state from file");
-        None
+    fn save(&self) -> SpotifyResult<()> {
+        let path = Auth::state_path();
+        let mut f = fs::File::create(&path)?;
+        let s = toml::to_string(&self.state)?;
+        f.write_all(s.as_bytes())?;
+        Ok(())
+    }
+
+    fn load() -> SpotifyResult<AuthState> {
+        let path = Auth::state_path();
+        let mut f = fs::File::open(&path)?;
+        let mut s = String::new();
+        f.read_to_string(&mut s)?;
+        Ok(toml::from_str(&s)?)
     }
 }
 
