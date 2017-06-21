@@ -6,16 +6,27 @@ use reqwest::*;
 use reqwest::header::*;
 
 #[derive(Debug)]
-pub struct Auth {
+pub struct AuthState {
     token: String,
     expiry_time: i64,
+}
+
+#[derive(Debug)]
+pub struct Creds {
+    username: String,
+    password: String,
+}
+
+#[derive(Debug)]
+pub struct Auth {
+    pub state: Option<AuthState>,
+    pub creds: Creds,
 }
 
 const CSRF: &str = "csrf_token";
 
 fn extract_from_flattened_list<'a>(src: &'a str, key: &str, sep: char) -> Option<&'a str> {
     if let Some(start) = src.find(key) {
-
         let end = src[start..].find(sep).unwrap_or_else(|| src.len());
         return Some(&src[start + key.len() + 1..end]); // +1 for =
     }
@@ -24,7 +35,6 @@ fn extract_from_flattened_list<'a>(src: &'a str, key: &str, sep: char) -> Option
 }
 
 fn extract_cookie_value<'a>(response: &'a Response, key: &str) -> SpotifyResult<&'a str> {
-    //    let &SetCookie(ref values) = response.headers().get::<SetCookie>()
     response
         .headers()
         .get::<SetCookie>()
@@ -35,7 +45,6 @@ fn extract_cookie_value<'a>(response: &'a Response, key: &str) -> SpotifyResult<
                           .and_then(|c| extract_from_flattened_list(c, key, ';'))
                   })
         .ok_or_else(|| SpotifyError::AuthMissingCookie(key.to_owned()))
-
 }
 
 fn create_cookie(pairs: &Vec<(&str, &str)>) -> Cookie {
@@ -43,7 +52,44 @@ fn create_cookie(pairs: &Vec<(&str, &str)>) -> Cookie {
 }
 
 impl Auth {
-    pub fn new(client: &Client, username: &str, password: &str) -> SpotifyResult<Auth> {
+    pub fn new(username: String, password: String) -> Auth {
+        let creds = Creds {
+            username: username,
+            password: password,
+        };
+
+        Auth {
+            state: None,
+            creds: creds,
+        }
+    }
+
+    // TODO move &Client into Auth as a field
+    /// Tries to retrieve a valid token, which may involve requesting a new one
+    pub fn token(&mut self, http_client: &Client) -> Option<&String> {
+        self.ensure_state(http_client);
+        self.state.as_ref().map(|s| &s.token)
+    }
+
+    fn is_state_valid(&self) -> bool {
+        self.state.as_ref().map(|s| s.is_valid()).unwrap_or(false)
+    }
+
+
+    fn ensure_state(&mut self, http_client: &Client) {
+
+        if !self.is_state_valid() {
+            // try to load from file
+            self.state = Auth::load();
+            if !self.is_state_valid() {
+                // authorise again
+                self.state = Auth::authorise(&self.creds, http_client).ok(); // TODO log error
+            }
+        }
+    }
+
+
+    fn authorise(creds: &Creds, client: &Client) -> SpotifyResult<AuthState> {
         const AUTHORIZE: &str = "https://accounts.spotify.com/authorize?";
         const LOGIN: &str = "https://accounts.spotify.com/api/login";
         const ACCEPT: &str = "https://accounts.spotify.com/en/authorize/accept";
@@ -79,14 +125,14 @@ impl Auth {
         let csrf = extract_cookie_value(&resp, CSRF)?;
 
         let login_data = vec![("remember", "false"),
-                              ("username", username),
-                              ("password", password),
+                              ("username", &creds.username),
+                              ("password", &creds.password),
                               ("csrf_token", csrf)];
         let login_cookies = create_cookie(&vec![(CSRF, csrf),
                                                 ("__bon",
                                                  "MHwwfDYyODMzMzc0OHwyNjM5MDAxNzQxNnwxfDF8MXww"),
                                                 ("fb_continue", &original_url),
-                                                ("remember", username)]);
+                                                ("remember", &creds.username)]);
 
         headers.set(Referer(original_url.clone()));
         headers.set(login_cookies);
@@ -131,7 +177,7 @@ impl Auth {
 
                 match (e, t) {
                     (Some(e), Some(t)) => {
-                        Some(Auth {
+                        Some(AuthState {
                                  token: t.to_owned(),
                                  expiry_time: time::get_time().sec + e.parse::<i64>().unwrap(),
                              })
@@ -142,6 +188,15 @@ impl Auth {
             .ok_or(SpotifyError::AuthFailedAccept)
     }
 
+    fn save(&self) {}
+
+    fn load() -> Option<AuthState> {
+        println!("Trying to load state from file");
+        None
+    }
+}
+
+impl AuthState {
     pub fn is_valid(&self) -> bool {
         self.expiry_time > time::get_time().sec
     }

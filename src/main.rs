@@ -17,7 +17,7 @@ fn main() {
             std::process::exit(1);
         }
         Ok(ref creds) => {
-            match creds.find(":") {
+            match creds.find(':') {
                 None => {
                     println!("Creds must be in format user:password");
                     std::process::exit(2);
@@ -31,7 +31,5 @@ fn main() {
         }
     };
 
-    let mut spot = Spotify::new();
-    spot.authenticate(&user, &password);
-
+    let mut spot = Spotify::new(user, password);
 }
