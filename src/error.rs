@@ -2,6 +2,7 @@ use std::fmt;
 use std::error::Error;
 use std::io;
 use reqwest;
+use url::ParseError;
 
 pub type SpotifyResult<T> = Result<T, SpotifyError>;
 
@@ -13,6 +14,7 @@ pub enum SpotifyError {
     BadTokenCache(&'static str),
     Io(io::Error),
     Reqwest(reqwest::Error),
+    Url(ParseError),
     BadResponseStatusCode(reqwest::StatusCode),
     NotImplemented,
 }
@@ -23,9 +25,10 @@ impl Error for SpotifyError {
             SpotifyError::AuthMissingCookie(_) => "expected cookie not present",
             SpotifyError::AuthBadCreds => "bad credentials",
             SpotifyError::AuthFailedAccept => "authorisation denied",
-            SpotifyError::Io(_) => "io error",
+            SpotifyError::Io(ref e) => e.description(),
             SpotifyError::BadTokenCache(_) => "invalid token cache",
             SpotifyError::Reqwest(ref e) => e.description(),
+            SpotifyError::Url(ref e) => e.description(),
             SpotifyError::BadResponseStatusCode(_) => "bad response status code",
             SpotifyError::NotImplemented => "not implemented",
         }
@@ -35,6 +38,7 @@ impl Error for SpotifyError {
         match *self {
             SpotifyError::Io(ref e) => e.cause(),
             SpotifyError::Reqwest(ref e) => e.cause(),
+            SpotifyError::Url(ref e) => e.cause(),
             _ => None,
         }
     }
@@ -55,6 +59,7 @@ impl fmt::Display for SpotifyError {
             }
             SpotifyError::Io(ref e) => e.fmt(f),
             SpotifyError::Reqwest(ref e) => e.fmt(f),
+            SpotifyError::Url(ref e) => e.fmt(f),
             SpotifyError::BadResponseStatusCode(ref code) => {
                 write!(f, "Bad response status code: {:?}", code)
             }
@@ -72,5 +77,11 @@ impl From<reqwest::Error> for SpotifyError {
 impl From<io::Error> for SpotifyError {
     fn from(err: io::Error) -> SpotifyError {
         SpotifyError::Io(err)
+    }
+}
+
+impl From<ParseError> for SpotifyError {
+    fn from(err: ParseError) -> SpotifyError {
+        SpotifyError::Url(err)
     }
 }

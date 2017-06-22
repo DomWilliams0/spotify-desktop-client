@@ -26,6 +26,17 @@ pub struct Track {
     name: String,
 }
 
+enum ApiEndpoint {
+    SavedTracks,
+}
+
+fn get_uri(endpoint: &ApiEndpoint) -> &'static str {
+    match *endpoint {
+        ApiEndpoint::SavedTracks => "https://api.spotify.com/v1/me/tracks",
+    }
+}
+
+
 impl Spotify {
     pub fn new(username: String, password: String) -> Self {
         let client = {
@@ -42,9 +53,12 @@ impl Spotify {
         }
     }
 
-    pub fn fetch_saved_tracks(&mut self) -> SpotifyResult<Vec<Track>> {
-        let params = [("limit", "10"), ("offset", "0")];
-        let uri = Url::parse_with_params("https://api.spotify.com/v1/me/tracks", &params).unwrap();
+    fn send_api_request(&mut self,
+                        endpoint: &ApiEndpoint,
+                        params: &[(&str, &str)])
+                        -> SpotifyResult<json::JsonValue> {
+        let uri = Url::parse_with_params(get_uri(endpoint), params)?;
+
         // TODO avoid allocation with token
         let mut response = self.client
             .get(uri)
@@ -58,13 +72,15 @@ impl Spotify {
         // TODO use etag header for caching
         // https://developer.spotify.com/web-api/user-guide/#conditional-requests
 
-        let body = {
-            let mut raw = String::new();
-            response.read_to_string(&mut raw)?;
-            json::parse(&raw).unwrap()
-        };
+        let mut raw = String::new();
+        response.read_to_string(&mut raw)?;
+        Ok(json::parse(&raw).unwrap())
+    }
 
-        let tracks = (&body["items"])
+    pub fn fetch_saved_tracks(&mut self) -> SpotifyResult<Vec<Track>> {
+        let params = [("limit", "50"), ("offset", "0")];
+        let response = self.send_api_request(&ApiEndpoint::SavedTracks, &params)?;
+        let tracks = (&response["items"])
             .members()
             .map(|o| {
                 let track = &o["track"];
