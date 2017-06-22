@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 extern crate time;
 extern crate reqwest;
 extern crate url;
@@ -5,6 +7,7 @@ extern crate json;
 
 #[macro_use]
 extern crate lazy_static;
+
 
 mod spotify;
 mod auth;
