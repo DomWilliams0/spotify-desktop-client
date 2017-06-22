@@ -9,8 +9,15 @@ use std::path::PathBuf;
 use std::fs;
 use std::io::Read;
 
+lazy_static! {
+    static ref CLIENT: Client = {
+            let mut c = Client::new().unwrap();
+            c.redirect(RedirectPolicy::none());
+            c
+    };
+}
+
 pub struct Spotify {
-    client: Client,
     auth: Auth,
 }
 
@@ -39,18 +46,9 @@ fn get_uri(endpoint: &ApiEndpoint) -> &'static str {
 
 impl Spotify {
     pub fn new(username: String, password: String) -> Self {
-        let client = {
-            let mut c = Client::new().unwrap();
-            c.redirect(RedirectPolicy::none());
-            c
-        };
-
         let auth = Auth::new(username, password);
 
-        Spotify {
-            client: client,
-            auth: auth,
-        }
+        Spotify { auth: auth }
     }
 
     fn send_api_request(&mut self,
@@ -60,9 +58,9 @@ impl Spotify {
         let uri = Url::parse_with_params(get_uri(endpoint), params)?;
 
         // TODO avoid allocation with token
-        let mut response = self.client
+        let mut response = CLIENT
             .get(uri)
-            .header(Authorization(Bearer { token: self.auth.token(&self.client)?.to_owned() }))
+            .header(Authorization(Bearer { token: self.auth.token(&CLIENT)?.to_owned() }))
             .send()?;
 
         if !response.status().is_success() {

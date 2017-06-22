@@ -3,6 +3,9 @@ extern crate reqwest;
 extern crate url;
 extern crate json;
 
+#[macro_use]
+extern crate lazy_static;
+
 mod spotify;
 mod auth;
 mod error;
