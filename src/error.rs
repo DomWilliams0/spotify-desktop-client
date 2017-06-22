@@ -13,6 +13,7 @@ pub enum SpotifyError {
     BadTokenCache(&'static str),
     Io(io::Error),
     Reqwest(reqwest::Error),
+    BadResponseStatusCode(reqwest::StatusCode),
     NotImplemented,
 }
 
@@ -25,6 +26,7 @@ impl Error for SpotifyError {
             SpotifyError::Io(_) => "io error",
             SpotifyError::BadTokenCache(_) => "invalid token cache",
             SpotifyError::Reqwest(ref e) => e.description(),
+            SpotifyError::BadResponseStatusCode(_) => "bad response status code",
             SpotifyError::NotImplemented => "not implemented",
         }
     }
@@ -53,6 +55,9 @@ impl fmt::Display for SpotifyError {
             }
             SpotifyError::Io(ref e) => e.fmt(f),
             SpotifyError::Reqwest(ref e) => e.fmt(f),
+            SpotifyError::BadResponseStatusCode(ref code) => {
+                write!(f, "Bad response status code: {:?}", code)
+            }
             SpotifyError::NotImplemented => write!(f, "Not currently implemented"),
         }
     }

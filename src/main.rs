@@ -1,6 +1,7 @@
 extern crate time;
 extern crate reqwest;
 extern crate url;
+extern crate json;
 
 mod spotify;
 mod auth;
@@ -31,5 +32,11 @@ fn main() {
         }
     };
 
-    let spot = Spotify::new(user, password);
+    let mut spot = Spotify::new(user, password);
+    let tracks = spot.fetch_saved_tracks()
+        .expect("Failed to test track fetching");
+    println!("{} tracks:", tracks.len());
+    for t in &tracks {
+        println!("{:?}", t);
+    }
 }

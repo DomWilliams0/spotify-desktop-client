@@ -27,8 +27,12 @@ const CSRF: &str = "csrf_token";
 
 fn extract_from_flattened_list<'a>(src: &'a str, key: &str, sep: char) -> Option<&'a str> {
     if let Some(start) = src.find(key) {
-        let end = src[start..].find(sep).unwrap_or_else(|| src.len());
-        return Some(&src[start + key.len() + 1..end]); // +1 for =
+        let start = start + key.len() + 1; // +1 for =
+        let end = match src[start..].find(sep) {
+            Some(i) => i + start,
+            None => src.len(),
+        };
+        return Some(&src[start..end]);
     }
 
     None
@@ -66,9 +70,9 @@ impl Auth {
 
     // TODO move &Client into Auth as a field
     /// Tries to retrieve a valid token, which may involve requesting a new one
-    pub fn token(&mut self, http_client: &Client) -> Option<&String> {
-        self.ensure_state(http_client);
-        self.state.as_ref().map(|s| &s.token)
+    pub fn token(&mut self, http_client: &Client) -> SpotifyResult<&String> {
+        self.ensure_state(http_client)?;
+        Ok(&self.state.as_ref().unwrap().token)
     }
 
     fn is_state_valid(&self) -> bool {
@@ -76,18 +80,18 @@ impl Auth {
     }
 
 
-    fn ensure_state(&mut self, http_client: &Client) {
-        // TODO dont ignore errors completely
+    fn ensure_state(&mut self, http_client: &Client) -> SpotifyResult<()> {
         if !self.is_state_valid() {
             // try to load from file
-            self.state = Auth::load().ok();
+            self.state = Auth::load().ok(); // ignore error
             if !self.is_state_valid() {
                 // authorise again
-                self.state = Auth::authorise(&self.creds, http_client).ok();
+                self.state = Some(Auth::authorise(&self.creds, http_client)?);
             }
         }
 
         self.save();
+        Ok(())
     }
 
 
@@ -228,6 +232,12 @@ mod filecache {
         Ok(())
     }
 
+    fn trim_in_place(s: &mut String) {
+        if s.ends_with('\n') {
+            s.pop();
+        }
+    }
+
     pub fn load() -> SpotifyResult<::auth::AuthState> {
         let f = File::open(state_path())?;
         let mut reader = BufReader::new(f);
@@ -241,6 +251,9 @@ mod filecache {
             .read_line(&mut expiry)
             .map_err(|_| SpotifyError::BadTokenCache("Expiry time missing"))?;
 
+        // remove new lines
+        trim_in_place(&mut token);
+        trim_in_place(&mut expiry);
         Ok(::auth::AuthState {
                token: token,
                expiry_time:
