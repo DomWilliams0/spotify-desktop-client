@@ -153,6 +153,9 @@ impl<'a> PageIterator<'a> {
             JsonValue::String(ref url) => Some(Url::parse(url)?),
             _ => None,
         };
+        trace!("Next href in pagination of {} items is {:?}",
+               self.total,
+               self.next);
 
         Ok(())
     }
@@ -166,7 +169,7 @@ impl<'a> Iterator for PageIterator<'a> {
             .pop()
             .or_else(|| match self.fetch() {
                          Err(e) => {
-                             println!("Failed to get next in iterator: {:?}", e);
+                             warn!("Failed to get next in iterator: {:?}", e);
                              None
                          }
                          _ => self.buffer.pop(),

@@ -122,7 +122,7 @@ impl Auth {
         let original_url = url::form_urlencoded::Serializer::new(String::from(AUTHORIZE))
             .extend_pairs(&query_params)
             .finish();
-        println!("Sending GET to /authorize");
+        debug!("Sending GET to /authorize");
         let resp = client
             .get(original_url.as_str())
             .headers(headers.clone())
@@ -143,7 +143,7 @@ impl Auth {
         headers.set(Referer(original_url.clone()));
         headers.set(login_cookies);
 
-        println!("Sending POST to /login");
+        debug!("Sending POST to /login");
         let resp = client
             .post(LOGIN)
             .headers(headers.clone())
@@ -154,7 +154,7 @@ impl Auth {
             return Err(SpotifyError::AuthBadCreds);
         }
 
-        println!("Authenticated!");
+        debug!("Authenticated!");
 
         let csrf = extract_cookie_value(&resp, CSRF)?;
         let accept_data = {
@@ -168,7 +168,7 @@ impl Auth {
         headers.remove::<Cookie>();
         headers.set(accept_cookies);
 
-        println!("Sending POST to /accept");
+        debug!("Sending POST to /accept");
         let resp = client
             .post(ACCEPT)
             .headers(headers)
@@ -202,7 +202,11 @@ impl Auth {
     }
 
     fn load() -> SpotifyResult<AuthState> {
-        filecache::load()
+        let r = filecache::load();
+        if r.is_ok() {
+            debug!("Loaded token from file successfully");
+        }
+        r
     }
 }
 
