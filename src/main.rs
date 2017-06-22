@@ -1,10 +1,6 @@
 extern crate time;
 extern crate reqwest;
 extern crate url;
-extern crate serde;
-extern crate toml;
-#[macro_use]
-extern crate serde_derive;
 
 mod spotify;
 mod auth;

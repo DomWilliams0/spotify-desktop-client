@@ -1,19 +1,14 @@
 use time;
 
-use std::path::PathBuf;
-use std::fs;
-use std::io::{Read, Write};
 use url;
 use error::*;
 use reqwest::*;
 use reqwest::header::*;
-use spotify;
-use toml;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct AuthState {
-    token: String,
-    expiry_time: i64,
+    pub token: String,
+    pub expiry_time: i64,
 }
 
 #[derive(Debug)]
@@ -195,27 +190,15 @@ impl Auth {
             .ok_or(SpotifyError::AuthFailedAccept)
     }
 
-    fn state_path() -> PathBuf {
-        const STATE_FILE: &str = "state.yml";
-        let mut path = spotify::config_dir();
-        path.push(STATE_FILE);
-        path
-    }
-
     fn save(&self) -> SpotifyResult<()> {
-        let path = Auth::state_path();
-        let mut f = fs::File::create(&path)?;
-        let s = toml::to_string(&self.state)?;
-        f.write_all(s.as_bytes())?;
-        Ok(())
+        match self.state {
+            Some(ref state) => filecache::save(state),
+            None => Err(SpotifyError::BadTokenCache("No token to cache")),
+        }
     }
 
     fn load() -> SpotifyResult<AuthState> {
-        let path = Auth::state_path();
-        let mut f = fs::File::open(&path)?;
-        let mut s = String::new();
-        f.read_to_string(&mut s)?;
-        Ok(toml::from_str(&s)?)
+        filecache::load()
     }
 }
 
@@ -223,4 +206,49 @@ impl AuthState {
     pub fn is_valid(&self) -> bool {
         self.expiry_time > time::get_time().sec
     }
+}
+
+mod filecache {
+    use std::path::PathBuf;
+    use spotify;
+    use error::*;
+    use std::fs::File;
+    use std::io::{Write, BufRead, BufReader};
+
+    fn state_path() -> PathBuf {
+        const STATE_FILE: &str = "state.conf";
+        let mut path = spotify::config_dir();
+        path.push(STATE_FILE);
+        path
+    }
+
+    pub fn save(state: &::auth::AuthState) -> SpotifyResult<()> {
+        let mut f = File::create(state_path())?;
+        write!(&mut f, "{}\n{}", state.token, state.expiry_time)?;
+        Ok(())
+    }
+
+    pub fn load() -> SpotifyResult<::auth::AuthState> {
+        let f = File::open(state_path())?;
+        let mut reader = BufReader::new(f);
+
+        let mut token = String::new();
+        let mut expiry = String::new();
+        reader
+            .read_line(&mut token)
+            .map_err(|_| SpotifyError::BadTokenCache("Token missing"))?;
+        reader
+            .read_line(&mut expiry)
+            .map_err(|_| SpotifyError::BadTokenCache("Expiry time missing"))?;
+
+        Ok(::auth::AuthState {
+               token: token,
+               expiry_time:
+                   expiry
+                       .parse()
+                       .map_err(|_| SpotifyError::BadTokenCache("Expiry time is not a number"))?,
+           })
+    }
+
+
 }
