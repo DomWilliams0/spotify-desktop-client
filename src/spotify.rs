@@ -45,10 +45,7 @@ impl Spotify {
                 let mut track = o["track"].take();
 
                 let album = track["album"]["id"].take_string().unwrap();
-                let artists = (&track["artists"])
-                    .members()
-                    .map(|o| o["id"].as_str().unwrap().to_owned())
-                    .collect::<Vec<SpotifyId>>();
+                let artists = collect_artist_ids(&mut track["artists"]);
 
                 album_ids.insert(album.clone());
                 artist_ids.extend(artists.clone());
@@ -67,26 +64,32 @@ impl Spotify {
         let ids = album_ids.into_iter().collect::<Vec<String>>();
         let albums = SeveralIterator::new(self, ApiEndpoint::Albums, &ids)?
             .map(|mut o| {
-                // TODO
-                let artists = Vec::new();
-                let images = Vec::new();
-                let genres = Vec::new();
-                let release_date = SpotifyDate {
-                    date: String::from(""),
-                    precision: String::from(""),
-                };
+                let images = o["images"]
+                    .members_mut()
+                    .map(|i| {
+                             Image {
+                                 width: i["width"].as_u32().unwrap(),
+                                 height: i["height"].as_u32().unwrap(),
+                                 url: Url::parse(i["url"].as_str().unwrap()).unwrap(),
+                             }
+                         })
+                    .collect();
+
+                // TODO parse out of strings
+                let release_date =
+                    SpotifyDate::from(o["release_date"].take_string().unwrap(),
+                                      o["release_date_precision"].take_string().unwrap());
 
                 Album {
                     album_id: o["id"].take_string().unwrap(),
-                    artist_ids: artists,
+                    artist_ids: collect_artist_ids(&mut o["artists"]),
                     images: images,
                     release_date: release_date,
-                    genres: genres,
                     name: o["name"].take_string().unwrap(),
                 }
 
             })
-            .collect::<Vec<Album>>();
+            .collect();
 
 
         Ok(SavedItems {
@@ -147,7 +150,8 @@ pub struct Album {
     artist_ids: Vec<SpotifyId>,
     images: Vec<Image>,
     release_date: SpotifyDate,
-    genres: Vec<String>,
+    // TODO get genres from artist
+    // genres: Vec<String>,
     name: String,
 }
 
@@ -166,6 +170,13 @@ enum ApiEndpoint {
     Artists,
 }
 
+fn collect_artist_ids(artists: &mut JsonValue) -> Vec<SpotifyId> {
+    artists
+        .members_mut()
+        .map(|mut o| o["id"].take_string().unwrap())
+        .collect::<Vec<SpotifyId>>()
+}
+
 fn get_uri_with_params(endpoint: ApiEndpoint, params: &[(&str, &str)]) -> SpotifyResult<Url> {
     Url::parse_with_params(get_uri(endpoint), params).map_err(SpotifyError::Url)
 }
@@ -175,6 +186,15 @@ fn get_uri(endpoint: ApiEndpoint) -> &'static str {
         ApiEndpoint::SavedTracks => "https://api.spotify.com/v1/me/tracks",
         ApiEndpoint::Albums => "https://api.spotify.com/v1/albums",
         ApiEndpoint::Artists => "https://api.spotify.com/v1/artists",
+    }
+}
+
+impl SpotifyDate {
+    fn from(date: String, precision: String) -> Self {
+        SpotifyDate {
+            date: date,
+            precision: precision,
+        }
     }
 }
 
