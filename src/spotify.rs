@@ -8,6 +8,8 @@ use std::env;
 use std::path::PathBuf;
 use std::fs;
 use std::io::Read;
+use std::collections::HashSet;
+use std::slice::Chunks;
 
 lazy_static! {
     static ref CLIENT: Client = {
@@ -103,6 +105,86 @@ pub fn config_dir() -> PathBuf {
     p.push("spotify_fun");
     fs::create_dir_all(&p);
     p
+}
+
+struct SeveralIterator<'a> {
+    spotify: &'a mut Spotify,
+    endpoint: ApiEndpoint,
+    limit: usize,
+    buffer: Vec<JsonValue>,
+    in_vec: &'a [String],
+    in_chunks: Chunks<'a, String>,
+}
+
+impl<'a> SeveralIterator<'a> {
+    fn new(spotify: &'a mut Spotify,
+           endpoint: ApiEndpoint,
+           what: &'a [String])
+           -> SpotifyResult<Self> {
+        let limit = SeveralIterator::get_limit(endpoint);
+        let it = SeveralIterator {
+            spotify: spotify,
+            endpoint: endpoint,
+            limit: limit,
+            buffer: Vec::with_capacity(limit),
+            in_vec: what,
+            in_chunks: what.chunks(limit),
+        };
+        Ok(it)
+    }
+
+    fn fetch(&mut self) -> SpotifyResult<()> {
+        // init chunks because it's apparently impossible to do in the constructor
+        if let Some(ids) = self.in_chunks.next() {
+            let url = {
+                // repeated parameters not supported!
+                let uri = get_uri(self.endpoint);
+                let joined = ids.join(",");
+                let prefix = "?ids=";
+                let mut qs = String::with_capacity(uri.len() + prefix.len() + joined.len());
+                qs.push_str(uri);
+                qs.push_str(prefix);
+                qs.push_str(&joined);
+                Url::parse(&qs)?
+            };
+            let mut response = self.spotify.send_api_request(url)?;
+            if let JsonValue::Object(mut obj) = response.take() {
+                let mut arr = obj.iter_mut()
+                    .map(|(_k, mut v)| v.take())
+                    .collect::<Vec<JsonValue>>()
+                    .pop()
+                    .unwrap();
+                if let JsonValue::Array(ref mut vec) = arr.take() {
+                    self.buffer.append(vec);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn get_limit(endpoint: ApiEndpoint) -> usize {
+        match endpoint {
+            ApiEndpoint::Albums => 20,
+            ApiEndpoint::Artists => 50,
+            _ => 0,
+        }
+    }
+}
+
+impl<'a> Iterator for SeveralIterator<'a> {
+    type Item = JsonValue;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.buffer
+            .pop()
+            .or_else(|| match self.fetch() {
+                         Err(e) => {
+                             warn!("Failed to get next in iterator: {:?}", e);
+                             None
+                         }
+                         _ => self.buffer.pop(),
+                     })
+    }
 }
 
 struct PageIterator<'a> {
