@@ -23,6 +23,12 @@ pub struct Spotify {
     auth: Auth,
 }
 
+pub struct SavedItems {
+    pub tracks: Vec<Track>,
+    pub albums: Vec<Album>,
+    pub artists: Vec<Artist>,
+}
+
 impl Spotify {
     pub fn new(username: String, password: String) -> Self {
         let auth = Auth::new(username, password);
@@ -30,29 +36,64 @@ impl Spotify {
         Spotify { auth: auth }
     }
 
-    pub fn fetch_saved_tracks(&mut self) -> SpotifyResult<Vec<Track>> {
-        let it = PageIterator::new(self, ApiEndpoint::SavedTracks)?;
-        let tracks = it.map(|o| {
-                let track = &o["track"];
+    pub fn fetch_saved_tracks(&mut self) -> SpotifyResult<SavedItems> {
+        let mut album_ids = HashSet::<String>::new();
+        let mut artist_ids = HashSet::new();
 
-                let album = &track["album"]["id"];
+        let tracks = PageIterator::new(self, ApiEndpoint::SavedTracks)?
+            .map(|mut o| {
+                let mut track = o["track"].take();
+
+                let album = track["album"]["id"].take_string().unwrap();
                 let artists = (&track["artists"])
                     .members()
                     .map(|o| o["id"].as_str().unwrap().to_owned())
                     .collect::<Vec<SpotifyId>>();
 
+                album_ids.insert(album.clone());
+                artist_ids.extend(artists.clone());
+
                 Track {
-                    album_id: album.as_str().unwrap().to_owned(),
+                    album_id: album,
                     artist_ids: artists,
                     disc: track["disc_number"].as_u8().unwrap(),
                     track_no: track["track_number"].as_u16().unwrap(),
                     duration_ms: track["duration_ms"].as_u32().unwrap(),
-                    name: track["name"].as_str().unwrap().to_owned(),
+                    name: track["name"].take_string().unwrap(),
                 }
             })
             .collect::<Vec<Track>>();
 
-        Ok(tracks)
+        let ids = album_ids.into_iter().collect::<Vec<String>>();
+        let albums = SeveralIterator::new(self, ApiEndpoint::Albums, &ids)?
+            .map(|mut o| {
+                // TODO
+                let artists = Vec::new();
+                let images = Vec::new();
+                let genres = Vec::new();
+                let release_date = SpotifyDate {
+                    date: String::from(""),
+                    precision: String::from(""),
+                };
+
+                Album {
+                    album_id: o["id"].take_string().unwrap(),
+                    artist_ids: artists,
+                    images: images,
+                    release_date: release_date,
+                    genres: genres,
+                    name: o["name"].take_string().unwrap(),
+                }
+
+            })
+            .collect::<Vec<Album>>();
+
+
+        Ok(SavedItems {
+               tracks: tracks,
+               albums: albums,
+               artists: Vec::new(),
+           })
     }
 
     fn send_api_request(&mut self, url: Url) -> SpotifyResult<JsonValue> {
@@ -87,15 +128,53 @@ pub struct Track {
     name: String,
 }
 
+#[derive(Debug)]
+pub struct Image {
+    width: u32,
+    height: u32,
+    url: Url,
+}
+
+#[derive(Debug)]
+pub struct SpotifyDate {
+    date: String,
+    precision: String,
+}
+
+#[derive(Debug)]
+pub struct Album {
+    album_id: SpotifyId,
+    artist_ids: Vec<SpotifyId>,
+    images: Vec<Image>,
+    release_date: SpotifyDate,
+    genres: Vec<String>,
+    name: String,
+}
+
+#[derive(Debug)]
+pub struct Artist {
+    artist_id: SpotifyId,
+    images: Vec<Image>,
+    genres: Vec<String>,
+    name: String,
+}
 
 #[derive(Debug, Copy, Clone)]
 enum ApiEndpoint {
     SavedTracks,
+    Albums,
+    Artists,
+}
+
+fn get_uri_with_params(endpoint: ApiEndpoint, params: &[(&str, &str)]) -> SpotifyResult<Url> {
+    Url::parse_with_params(get_uri(endpoint), params).map_err(SpotifyError::Url)
 }
 
 fn get_uri(endpoint: ApiEndpoint) -> &'static str {
     match endpoint {
         ApiEndpoint::SavedTracks => "https://api.spotify.com/v1/me/tracks",
+        ApiEndpoint::Albums => "https://api.spotify.com/v1/albums",
+        ApiEndpoint::Artists => "https://api.spotify.com/v1/artists",
     }
 }
 
@@ -208,7 +287,7 @@ impl<'a> PageIterator<'a> {
             total: 0,
             next: Some({
                            let params = [("limit", LIMIT_STR), ("offset", "0")];
-                           Url::parse_with_params(get_uri(endpoint), &params)?
+                           get_uri_with_params(endpoint, &params)?
                        }),
             buffer: Vec::with_capacity(LIMIT),
         };

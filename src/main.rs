@@ -48,10 +48,12 @@ fn main() {
     };
 
     let mut spot = Spotify::new(user, password);
-    let tracks = spot.fetch_saved_tracks()
+    let items = spot.fetch_saved_tracks()
         .expect("Failed to test track fetching");
-    info!("{} tracks:", tracks.len());
-    for t in &tracks {
+
+    let list = &items.albums;
+    info!("{} elements:", list.len());
+    for t in list {
         info!("{:?}", t);
     }
 }
