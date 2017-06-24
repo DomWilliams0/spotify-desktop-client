@@ -45,7 +45,7 @@ impl Spotify {
                 let mut track = o["track"].take();
 
                 let album = track["album"]["id"].take_string().unwrap();
-                let artists = collect_artist_ids(&mut track["artists"]);
+                let artists = collect_artist_ids(track["artists"].take());
 
                 album_ids.insert(album.clone());
                 artist_ids.extend(artists.clone());
@@ -71,8 +71,8 @@ impl Spotify {
 
                 Album {
                     album_id: o["id"].take_string().unwrap(),
-                    artist_ids: collect_artist_ids(&mut o["artists"]),
-                    images: collect_images(&mut o["images"]),
+                    artist_ids: collect_artist_ids(o["artists"].take()),
+                    images: collect_images(o["images"].take()),
                     release_date: release_date,
                     name: o["name"].take_string().unwrap(),
                 }
@@ -96,7 +96,7 @@ impl Spotify {
                 // TODO take instead of mut in collect_..
                 Artist {
                     artist_id: o["id"].take_string().unwrap(),
-                    images: collect_images(&mut o["images"]),
+                    images: collect_images(o["images"].take()),
                     genres: genres,
                     name: o["name"].take_string().unwrap(),
                 }
@@ -182,16 +182,16 @@ enum ApiEndpoint {
     Artists,
 }
 
-fn collect_artist_ids(artists: &mut JsonValue) -> Vec<SpotifyId> {
+fn collect_artist_ids(mut artists: JsonValue) -> Vec<SpotifyId> {
     artists
         .members_mut()
-        .map(|mut o| o["id"].take_string().unwrap())
+        .map(move |o| o["id"].take_string().unwrap())
         .collect::<Vec<SpotifyId>>()
 }
-fn collect_images(images: &mut JsonValue) -> Vec<Image> {
+fn collect_images(mut images: JsonValue) -> Vec<Image> {
     images
         .members_mut()
-        .map(|i| {
+        .map(move |i| {
                  Image {
                      width: i["width"].as_u32().unwrap(),
                      height: i["height"].as_u32().unwrap(),
