@@ -51,7 +51,7 @@ fn main() {
     let items = spot.fetch_saved_tracks()
         .expect("Failed to test track fetching");
 
-    let list = &items.albums;
+    let list = &items.artists;
     info!("{} elements:", list.len());
     for t in list {
         info!("{:?}", t);

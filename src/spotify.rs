@@ -64,17 +64,6 @@ impl Spotify {
         let ids = album_ids.into_iter().collect::<Vec<String>>();
         let albums = SeveralIterator::new(self, ApiEndpoint::Albums, &ids)?
             .map(|mut o| {
-                let images = o["images"]
-                    .members_mut()
-                    .map(|i| {
-                             Image {
-                                 width: i["width"].as_u32().unwrap(),
-                                 height: i["height"].as_u32().unwrap(),
-                                 url: Url::parse(i["url"].as_str().unwrap()).unwrap(),
-                             }
-                         })
-                    .collect();
-
                 // TODO parse out of strings
                 let release_date =
                     SpotifyDate::from(o["release_date"].take_string().unwrap(),
@@ -83,7 +72,7 @@ impl Spotify {
                 Album {
                     album_id: o["id"].take_string().unwrap(),
                     artist_ids: collect_artist_ids(&mut o["artists"]),
-                    images: images,
+                    images: collect_images(&mut o["images"]),
                     release_date: release_date,
                     name: o["name"].take_string().unwrap(),
                 }
@@ -91,11 +80,34 @@ impl Spotify {
             })
             .collect();
 
+        let ids = artist_ids.into_iter().collect::<Vec<String>>();
+        let artists = SeveralIterator::new(self, ApiEndpoint::Artists, &ids)?
+            .map(|mut o| {
+                //            artist_id: SpotifyId,
+                //            images: Vec<Image>,
+                //            genres: Vec<String>,
+                //            name: String,
+
+                let genres = o["genres"]
+                    .members_mut()
+                    .map(|g| g.take_string().unwrap())
+                    .collect();
+
+                // TODO take instead of mut in collect_..
+                Artist {
+                    artist_id: o["id"].take_string().unwrap(),
+                    images: collect_images(&mut o["images"]),
+                    genres: genres,
+                    name: o["name"].take_string().unwrap(),
+                }
+            })
+            .collect();
+
 
         Ok(SavedItems {
                tracks: tracks,
                albums: albums,
-               artists: Vec::new(),
+               artists: artists,
            })
     }
 
@@ -175,6 +187,18 @@ fn collect_artist_ids(artists: &mut JsonValue) -> Vec<SpotifyId> {
         .members_mut()
         .map(|mut o| o["id"].take_string().unwrap())
         .collect::<Vec<SpotifyId>>()
+}
+fn collect_images(images: &mut JsonValue) -> Vec<Image> {
+    images
+        .members_mut()
+        .map(|i| {
+                 Image {
+                     width: i["width"].as_u32().unwrap(),
+                     height: i["height"].as_u32().unwrap(),
+                     url: Url::parse(i["url"].as_str().unwrap()).unwrap(),
+                 }
+             })
+        .collect()
 }
 
 fn get_uri_with_params(endpoint: ApiEndpoint, params: &[(&str, &str)]) -> SpotifyResult<Url> {
