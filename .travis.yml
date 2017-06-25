@@ -14,8 +14,8 @@ env:
     secure: iHg0q3afb2o+9oOA+BWDQOcTJi0B/47h+Gu04/dkd4BUQlz7tYJ43WcWkaJC3+YdONxg2v5YoEoIdLjM6UethLhovTgf1YSojJm/dAUtdmkC3kc7LFzw+Y4Hhi49atJ+vDa8ui3tR2Y+POKUOp77JByQQgyPgTKaHtIVjWekjWb8lkBwFgNBC6C67GhnfEAK8UCJfH/nNGHfon9Thib9nWC8EMw5yCw5kFJkieOaKybwEkmVpKX6FhKBk6ugtPMaXpLf4ayIJqmOwH2QBEy2ng8Nv3GDANkHJDkGiVg2AOncddb1RIFVYsSsQ39jO/lSGqUyo24F1cKAm8W7meBN4lUvZhbFspyRYV2U9LUVYhnQWXNg6o8VDXGmgJHvvwGwEIzB69b1cf4woDP+a7XIJdnSxUjr99bpI5mhqgUHJqxyCuyIEJhDDctmO6hU1aBPgqmpZUCjcq7pwfi5gXM5JC27BnoqWdYoL5F3XlgTTQoVqN3P4Td/4MpTSPZBPqN/iuw0xwNfIEYpgm3dsV+N7UvKIZgRnYwLyyiXqZTbYV0BSfg5wL3Wdqe9JbnY//9mZWvx2MgpLtIFeSfbEFqkUvb4xmymqvND4PlZ6onpWbZUkudc6MeC/pbVSHmluWry4OWtHfHCjbLzSTruYD9xWR0SsVDpqaon6BmG/s+q+yQ=
 script:
 - cd spotify-model
-- cargo build --verbose
-- cargo test --verbose
+- cargo build
+- cargo test
 before_install:
 - sudo apt-get update
 addons:
@@ -27,6 +27,7 @@ addons:
     - cmake
     - gcc
     - binutils-dev
+    - jq
 after_success: |
   wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
   tar xzf master.tar.gz &&
@@ -38,6 +39,6 @@ after_success: |
   sudo make install &&
   cd ../.. &&
   rm -rf kcov-master &&
-  for file in target/debug/spotify-model; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
+  for file in target/debug/spotify-model; do mkdir -p "target/cov/$(basename $file)"; kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" $(cargo test --no-run --message-format=json | jq -r "select(.profile.test == true) | .filenames[]" | head -n 1); done &&
   bash <(curl -s https://codecov.io/bash) &&
   echo "Uploaded code coverage"
