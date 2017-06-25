@@ -159,10 +159,10 @@ impl Auth {
                               ("password", &creds.password),
                               ("csrf_token", csrf)];
         let login_cookies = create_cookie(&[(CSRF, csrf),
-                                                ("__bon",
-                                                 "MHwwfDYyODMzMzc0OHwyNjM5MDAxNzQxNnwxfDF8MXww"),
-                                                ("fb_continue", &original_url),
-                                                ("remember", &creds.username)]);
+                                            ("__bon",
+                                             "MHwwfDYyODMzMzc0OHwyNjM5MDAxNzQxNnwxfDF8MXww"),
+                                            ("fb_continue", &original_url),
+                                            ("remember", &creds.username)]);
 
         headers.set(Referer(original_url.clone()));
         headers.set(login_cookies);
@@ -187,8 +187,8 @@ impl Auth {
             pairs
         };
         let accept_cookies = create_cookie(&[("sp_ac", extract_cookie_value(&resp, "sp_ac")?),
-                                                 ("sp_dc", extract_cookie_value(&resp, "sp_dc")?),
-                                                 (CSRF, extract_cookie_value(&resp, CSRF)?)]);
+                                             ("sp_dc", extract_cookie_value(&resp, "sp_dc")?),
+                                             (CSRF, extract_cookie_value(&resp, CSRF)?)]);
         headers.remove::<Cookie>();
         headers.set(accept_cookies);
 
