@@ -14,7 +14,7 @@ matrix:
 env:
   global:
   - RUSTFLAGS="-C link-dead-code"
-  - TEST_DIR=spotify-model
+  - TRAVIS_BUILD_DIR=spotify-model
 
 before_install:
   - sudo apt-get update
