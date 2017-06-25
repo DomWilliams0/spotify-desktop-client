@@ -9,12 +9,8 @@ extern crate fern;
 #[macro_use]
 extern crate log;
 
-#[macro_use]
-extern crate lazy_static;
-
-
 mod spotify;
-mod auth;
+mod http;
 mod error;
 
 use spotify::Spotify;

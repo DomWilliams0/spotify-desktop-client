@@ -5,6 +5,8 @@ use error::*;
 use reqwest::*;
 use reqwest::header::*;
 
+use http::auth;
+
 #[derive(Debug)]
 pub struct AuthState {
     pub token: String,
@@ -19,6 +21,7 @@ pub struct Creds {
 
 #[derive(Debug)]
 pub struct Auth {
+    client: Client,
     pub state: Option<AuthState>,
     pub creds: Creds,
 }
@@ -61,11 +64,22 @@ impl Auth {
             username: username,
             password: password,
         };
+        let client = {
+            let mut c = Client::new().unwrap();
+            c.redirect(RedirectPolicy::none());
+            c
+        };
 
         Auth {
+            client: client,
             state: None,
             creds: creds,
         }
+    }
+
+    #[inline]
+    pub fn client(&self) -> &Client {
+        &self.client
     }
 
     // TODO move &Client into Auth as a field
@@ -223,6 +237,8 @@ mod filecache {
     use std::fs::File;
     use std::io::{Write, BufRead, BufReader};
 
+    use http::auth;
+
     fn state_path() -> PathBuf {
         const STATE_FILE: &str = "state.conf";
         let mut path = spotify::config_dir();
@@ -230,7 +246,7 @@ mod filecache {
         path
     }
 
-    pub fn save(state: &::auth::AuthState) -> SpotifyResult<()> {
+    pub fn save(state: &auth::AuthState) -> SpotifyResult<()> {
         let mut f = File::create(state_path())?;
         write!(&mut f, "{}\n{}", state.token, state.expiry_time)?;
         Ok(())
@@ -242,7 +258,7 @@ mod filecache {
         }
     }
 
-    pub fn load() -> SpotifyResult<::auth::AuthState> {
+    pub fn load() -> SpotifyResult<auth::AuthState> {
         let f = File::open(state_path())?;
         let mut reader = BufReader::new(f);
 
@@ -258,7 +274,7 @@ mod filecache {
         // remove new lines
         trim_in_place(&mut token);
         trim_in_place(&mut expiry);
-        Ok(::auth::AuthState {
+        Ok(auth::AuthState {
                token: token,
                expiry_time:
                    expiry
