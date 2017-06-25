@@ -73,17 +73,11 @@ impl Spotify {
         let ids = artist_ids.into_iter().collect::<Vec<String>>();
         let artists = SeveralIterator::new(&self.auth, ApiEndpoint::Artists, &ids)?
             .map(|mut o| {
-                //            artist_id: SpotifyId,
-                //            images: Vec<Image>,
-                //            genres: Vec<String>,
-                //            name: String,
-
                 let genres = o["genres"]
                     .members_mut()
                     .map(|g| g.take_string().unwrap())
                     .collect();
 
-                // TODO take instead of mut in collect_..
                 Artist {
                     artist_id: o["id"].take_string().unwrap(),
                     images: collect_images(o["images"].take()),
