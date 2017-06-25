@@ -31,6 +31,10 @@ const CSRF: &str = "csrf_token";
 fn extract_from_flattened_list<'a>(src: &'a str, key: &str, sep: char) -> Option<&'a str> {
     if let Some(start) = src.find(key) {
         let start = start + key.len() + 1; // +1 for =
+        if start >= src.len() {
+            return None;
+        }
+
         let end = match src[start..].find(sep) {
             Some(i) => i + start,
             None => src.len(),
@@ -41,9 +45,8 @@ fn extract_from_flattened_list<'a>(src: &'a str, key: &str, sep: char) -> Option
     None
 }
 
-fn extract_cookie_value<'a>(response: &'a Response, key: &str) -> SpotifyResult<&'a str> {
-    response
-        .headers()
+fn extract_cookie_value<'a>(headers: &'a Headers, key: &str) -> SpotifyResult<&'a str> {
+    headers
         .get::<SetCookie>()
         .and_then(|&SetCookie(ref values)| {
                       values
@@ -152,7 +155,7 @@ impl Auth {
             .headers(headers.clone())
             .send()?;
 
-        let csrf = extract_cookie_value(&resp, CSRF)?;
+        let csrf = extract_cookie_value(resp.headers(), CSRF)?;
 
         let login_data = vec![("remember", "false"),
                               ("username", &creds.username),
@@ -180,15 +183,16 @@ impl Auth {
 
         debug!("Authenticated!");
 
-        let csrf = extract_cookie_value(&resp, CSRF)?;
+        let csrf = extract_cookie_value(resp.headers(), CSRF)?;
         let accept_data = {
             let mut pairs = query_params;
             pairs.push((CSRF, csrf.to_owned()));
             pairs
         };
-        let accept_cookies = create_cookie(&[("sp_ac", extract_cookie_value(&resp, "sp_ac")?),
-                                             ("sp_dc", extract_cookie_value(&resp, "sp_dc")?),
-                                             (CSRF, extract_cookie_value(&resp, CSRF)?)]);
+        let accept_cookies =
+            create_cookie(&[("sp_ac", extract_cookie_value(resp.headers(), "sp_ac")?),
+                            ("sp_dc", extract_cookie_value(resp.headers(), "sp_dc")?),
+                            (CSRF, extract_cookie_value(resp.headers(), CSRF)?)]);
         headers.remove::<Cookie>();
         headers.set(accept_cookies);
 
@@ -294,4 +298,50 @@ mod filecache {
     }
 
 
+}
+
+#[cfg(test)]
+mod test {
+    use http::auth::*;
+    use reqwest::header::{Headers, SetCookie, Cookie};
+    use error::SpotifyError;
+
+    #[test]
+    fn flattened_list_extraction() {
+        const URL: &'static str = "http://localhost:8080#banana=good&big-scary-dogs=bad&boris=johnson";
+
+        assert_eq!(extract_from_flattened_list(URL, "banana", '&'),
+                   Some("good"));
+        assert_eq!(extract_from_flattened_list(URL, "big-scary-dogs", '&'),
+                   Some("bad"));
+        assert_eq!(extract_from_flattened_list(URL, "boris", '&'),
+                   Some("johnson"));
+        assert_eq!(extract_from_flattened_list(URL, "nonexistent", '&'), None);
+
+        assert_eq!(extract_from_flattened_list("", "", ' '), None);
+        assert_eq!(extract_from_flattened_list("&junk&", "nothing", '&'), None);
+    }
+
+    #[test]
+    fn cookie_extraction() {
+        let headers = {
+            let mut h = Headers::new();
+            h.set(SetCookie(vec!["test=message; Path=/; SomethingElse=lala".to_owned()]));
+            h
+        };
+
+        assert_eq!(extract_cookie_value(&headers, "test").ok(), Some("message"));
+        match extract_cookie_value(&headers, "nonexistent") {
+            Err(SpotifyError::AuthMissingCookie(_)) => (),
+            _ => assert!(false, "Error not returned"),
+        }
+    }
+
+    #[test]
+    fn cookie_creation() {
+        let pairs = [("harold", "robinson"), ("awful", "man")];
+        let cookie = create_cookie(&pairs);
+        let Cookie(key_value) = cookie;
+        assert_eq!(key_value, ["harold=robinson", "awful=man"]);
+    }
 }
