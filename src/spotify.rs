@@ -1,16 +1,13 @@
-use reqwest::{RedirectPolicy, Client, Url};
-use reqwest::header::{Authorization, Bearer};
+use reqwest::Url;
 use error::*;
-use json::{parse, JsonValue};
+use json::JsonValue;
 
 use std::env;
 use std::path::PathBuf;
 use std::fs;
-use std::io::Read;
 use std::collections::HashSet;
-use std::slice::Chunks;
 
-use http::auth::{Auth, AuthState};
+use http::auth::Auth;
 use http::request::*;
 
 pub struct Spotify {
@@ -30,11 +27,11 @@ impl Spotify {
         Spotify { auth: auth }
     }
 
-    pub fn fetch_saved_tracks(&mut self) -> SpotifyResult<SavedItems> {
+    pub fn fetch_saved_tracks(&self) -> SpotifyResult<SavedItems> {
         let mut album_ids = HashSet::<String>::new();
         let mut artist_ids = HashSet::new();
 
-        let tracks = PageIterator::new(&mut self.auth, ApiEndpoint::SavedTracks)?
+        let tracks = PageIterator::new(&self.auth, ApiEndpoint::SavedTracks)?
             .map(|mut o| {
                 let mut track = o["track"].take();
 
@@ -56,7 +53,7 @@ impl Spotify {
             .collect::<Vec<Track>>();
 
         let ids = album_ids.into_iter().collect::<Vec<String>>();
-        let albums = SeveralIterator::new(&mut self.auth, ApiEndpoint::Albums, &ids)?
+        let albums = SeveralIterator::new(&self.auth, ApiEndpoint::Albums, &ids)?
             .map(|mut o| {
                 // TODO parse out of strings
                 let release_date =
@@ -74,7 +71,7 @@ impl Spotify {
             .collect();
 
         let ids = artist_ids.into_iter().collect::<Vec<String>>();
-        let artists = SeveralIterator::new(&mut self.auth, ApiEndpoint::Artists, &ids)?
+        let artists = SeveralIterator::new(&self.auth, ApiEndpoint::Artists, &ids)?
             .map(|mut o| {
                 //            artist_id: SpotifyId,
                 //            images: Vec<Image>,

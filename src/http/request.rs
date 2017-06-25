@@ -1,13 +1,9 @@
-use reqwest::{RedirectPolicy, Client, Url};
+use reqwest::Url;
 use reqwest::header::{Authorization, Bearer};
 use error::*;
 use json::{parse, JsonValue};
 
-use std::env;
-use std::path::PathBuf;
-use std::fs;
 use std::io::Read;
-use std::collections::HashSet;
 use std::slice::Chunks;
 
 use http::auth::*;
@@ -31,12 +27,12 @@ fn get_uri(endpoint: ApiEndpoint) -> &'static str {
     }
 }
 
-pub fn send_api_request(auth: &mut Auth, url: Url) -> SpotifyResult<JsonValue> {
+pub fn send_api_request(auth: &Auth, url: Url) -> SpotifyResult<JsonValue> {
     // TODO avoid allocation with token
     let client = auth.client();
     let mut response = client
         .get(url)
-        .header(Authorization(Bearer { token: auth.token(&client)?.to_owned() }))
+        .header(Authorization(Bearer { token: auth.token(client)? }))
         .send()?;
 
     if !response.status().is_success() {
@@ -52,7 +48,7 @@ pub fn send_api_request(auth: &mut Auth, url: Url) -> SpotifyResult<JsonValue> {
 }
 
 pub struct SeveralIterator<'a> {
-    auth: &'a mut Auth,
+    auth: &'a Auth,
     endpoint: ApiEndpoint,
     limit: usize,
     buffer: Vec<JsonValue>,
@@ -61,10 +57,7 @@ pub struct SeveralIterator<'a> {
 }
 
 impl<'a> SeveralIterator<'a> {
-    pub fn new(auth: &'a mut Auth,
-               endpoint: ApiEndpoint,
-               what: &'a [String])
-               -> SpotifyResult<Self> {
+    pub fn new(auth: &'a Auth, endpoint: ApiEndpoint, what: &'a [String]) -> SpotifyResult<Self> {
         let limit = SeveralIterator::get_limit(endpoint);
         let it = SeveralIterator {
             auth: auth,
@@ -132,7 +125,7 @@ impl<'a> Iterator for SeveralIterator<'a> {
 }
 
 pub struct PageIterator<'a> {
-    auth: &'a mut Auth,
+    auth: &'a Auth,
     endpoint: ApiEndpoint,
     limit: usize,
     total: u32,
@@ -141,7 +134,7 @@ pub struct PageIterator<'a> {
 }
 
 impl<'a> PageIterator<'a> {
-    pub fn new(auth: &'a mut Auth, endpoint: ApiEndpoint) -> SpotifyResult<Self> {
+    pub fn new(auth: &'a Auth, endpoint: ApiEndpoint) -> SpotifyResult<Self> {
         const LIMIT: usize = 50;
         const LIMIT_STR: &str = "50"; // pff why not
 

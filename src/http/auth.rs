@@ -5,7 +5,7 @@ use error::*;
 use reqwest::*;
 use reqwest::header::*;
 
-use http::auth;
+use std::cell::RefCell;
 
 #[derive(Debug)]
 pub struct AuthState {
@@ -22,7 +22,7 @@ pub struct Creds {
 #[derive(Debug)]
 pub struct Auth {
     client: Client,
-    pub state: Option<AuthState>,
+    pub state: RefCell<Option<AuthState>>,
     pub creds: Creds,
 }
 
@@ -72,7 +72,7 @@ impl Auth {
 
         Auth {
             client: client,
-            state: None,
+            state: RefCell::new(None),
             creds: creds,
         }
     }
@@ -82,29 +82,39 @@ impl Auth {
         &self.client
     }
 
-    // TODO move &Client into Auth as a field
     /// Tries to retrieve a valid token, which may involve requesting a new one
-    pub fn token(&mut self, http_client: &Client) -> SpotifyResult<&String> {
+    /// Returns a fresh copy, for use in an Authorization header, for example
+    pub fn token(&self, http_client: &Client) -> SpotifyResult<String> {
         self.ensure_state(http_client)?;
-        Ok(&self.state.as_ref().unwrap().token)
+        Ok(self.state.borrow().as_ref().unwrap().token.clone())
     }
 
     fn is_state_valid(&self) -> bool {
-        self.state.as_ref().map(|s| s.is_valid()).unwrap_or(false)
+        self.state
+            .borrow()
+            .as_ref()
+            .map(|s| s.is_valid())
+            .unwrap_or(false)
     }
 
 
-    fn ensure_state(&mut self, http_client: &Client) -> SpotifyResult<()> {
+    fn ensure_state(&self, http_client: &Client) -> SpotifyResult<()> {
         if !self.is_state_valid() {
             // try to load from file
-            self.state = Auth::load().ok(); // ignore error
+            {
+                let mut state = self.state.borrow_mut();
+                *state = Auth::load().ok(); // ignore error
+            }
             if !self.is_state_valid() {
-                // authorise again
-                self.state = Some(Auth::authorise(&self.creds, http_client)?);
+                {
+                    // authorise again
+                    let mut state = self.state.borrow_mut();
+                    *state = Some(Auth::authorise(&self.creds, http_client)?);
+                }
             }
         }
 
-        self.save();
+        self.save().ok();
         Ok(())
     }
 
@@ -209,7 +219,7 @@ impl Auth {
     }
 
     fn save(&self) -> SpotifyResult<()> {
-        match self.state {
+        match *self.state.borrow() {
             Some(ref state) => filecache::save(state),
             None => Err(SpotifyError::BadTokenCache("No token to cache")),
         }

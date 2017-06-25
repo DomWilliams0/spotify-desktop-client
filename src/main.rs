@@ -43,7 +43,7 @@ fn main() {
         }
     };
 
-    let mut spot = Spotify::new(user, password);
+    let spot = Spotify::new(user, password);
     let items = spot.fetch_saved_tracks()
         .expect("Failed to test track fetching");
 
