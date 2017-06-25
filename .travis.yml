@@ -14,7 +14,11 @@ matrix:
 env:
   global:
   - RUSTFLAGS="-C link-dead-code"
-  - TRAVIS_BUILD_DIR=spotify-model
+
+script:
+    - cd spotify-model
+    - cargo build --verbose
+    - cargo test --verbose
 
 before_install:
   - sudo apt-get update
