@@ -108,7 +108,7 @@ pub struct Track {
     name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Image {
     width: u32,
     height: u32,
@@ -176,4 +176,125 @@ pub fn config_dir() -> PathBuf {
     p.push("spotify_fun");
     fs::create_dir_all(&p).ok();
     p
+}
+
+#[cfg(test)]
+mod test {
+    use json;
+    use spotify::*;
+    use reqwest::Url;
+
+    #[test]
+    fn artist_collection() {
+        assert_eq!(collect_artist_ids(json::parse(ARTISTS_JSON).unwrap()),
+                   vec!["0oSGxfWSnnOXhD2fKuz2Gy", "3dBVyJ7JuOMt4GE9607Qin"]);
+        assert_eq!(collect_artist_ids(json::parse("[]").unwrap()),
+                   Vec::<String>::new());
+        assert_eq!(collect_artist_ids(json::parse("null").unwrap()),
+                   Vec::<String>::new());
+    }
+
+    #[test]
+    fn image_collection() {
+        let expected =
+            vec![Image {
+                     width: 1000,
+                     height: 1000,
+                     url: Url::parse("https://i.scdn.co/image/32bd9707b42a2c081482ec9cd3ffa8879f659f95",)
+                         .unwrap(),
+                 },
+                 Image {
+                     width: 640,
+                     height: 640,
+                     url: Url::parse("https://i.scdn.co/image/865f24753e5e4f40a383bf24a9cdda598a4559a8",)
+                         .unwrap(),
+                 }];
+        assert_eq!(collect_images(json::parse(IMAGES_JSON).unwrap()), expected);
+        assert_eq!(collect_images(json::parse("[]").unwrap()),
+                   Vec::<Image>::new());
+        assert_eq!(collect_images(json::parse("null").unwrap()),
+                   Vec::<Image>::new());
+    }
+
+    // ugly constants
+
+    const ARTISTS_JSON: &'static str = r#"
+[ {
+    "external_urls" : {
+      "spotify" : "https://open.spotify.com/artist/0oSGxfWSnnOXhD2fKuz2Gy"
+    },
+    "followers" : {
+      "href" : null,
+      "total" : 633494
+    },
+    "genres" : [ "art rock", "glam rock", "permanent wave" ],
+    "href" : "https://api.spotify.com/v1/artists/0oSGxfWSnnOXhD2fKuz2Gy",
+    "id" : "0oSGxfWSnnOXhD2fKuz2Gy",
+    "images" : [ {
+      "height" : 1000,
+      "url" : "https://i.scdn.co/image/32bd9707b42a2c081482ec9cd3ffa8879f659f95",
+      "width" : 1000
+    }, {
+      "height" : 640,
+      "url" : "https://i.scdn.co/image/865f24753e5e4f40a383bf24a9cdda598a4559a8",
+      "width" : 640
+    }, {
+      "height" : 200,
+      "url" : "https://i.scdn.co/image/7ddd6fa5cf78aee2f2e8b347616151393022b7d9",
+      "width" : 200
+    }, {
+      "height" : 64,
+      "url" : "https://i.scdn.co/image/c8dc28c191432862afce298216458a6f00bbfbd8",
+      "width" : 64
+    } ],
+    "name" : "David Bowie",
+    "popularity" : 77,
+    "type" : "artist",
+    "uri" : "spotify:artist:0oSGxfWSnnOXhD2fKuz2Gy"
+  }, {
+    "external_urls" : {
+      "spotify" : "https://open.spotify.com/artist/3dBVyJ7JuOMt4GE9607Qin"
+    },
+    "followers" : {
+      "href" : null,
+      "total" : 52338
+    },
+    "genres" : [ "glam rock", "protopunk" ],
+    "href" : "https://api.spotify.com/v1/artists/3dBVyJ7JuOMt4GE9607Qin",
+    "id" : "3dBVyJ7JuOMt4GE9607Qin",
+    "images" : [ {
+      "height" : 1300,
+      "url" : "https://i.scdn.co/image/5515a710c94ccd4edd8b9a0587778ed5e3f997da",
+      "width" : 1000
+    }, {
+      "height" : 832,
+      "url" : "https://i.scdn.co/image/c990e667b4ca8240c73b0db06e6d76a3b27ce929",
+      "width" : 640
+    }, {
+      "height" : 260,
+      "url" : "https://i.scdn.co/image/de2fa1d11c59e63143117d44ec9990b9e40451a2",
+      "width" : 200
+    }, {
+      "height" : 83,
+      "url" : "https://i.scdn.co/image/b39638735adb4a4a54621293b99ab65c546f605e",
+      "width" : 64
+    } ],
+    "name" : "T. Rex",
+    "popularity" : 58,
+    "type" : "artist",
+    "uri" : "spotify:artist:3dBVyJ7JuOMt4GE9607Qin"
+  } ]
+        "#;
+
+    const IMAGES_JSON: &'static str = r#"
+    [ {
+      "height" : 1000,
+      "url" : "https://i.scdn.co/image/32bd9707b42a2c081482ec9cd3ffa8879f659f95",
+      "width" : 1000
+    }, {
+      "height" : 640,
+      "url" : "https://i.scdn.co/image/865f24753e5e4f40a383bf24a9cdda598a4559a8",
+      "width" : 640
+    } ]
+        "#;
 }
