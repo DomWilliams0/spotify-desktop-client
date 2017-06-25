@@ -180,6 +180,6 @@ pub fn config_dir() -> PathBuf {
     let mut p = PathBuf::from(env::var("XDG_CONFIG_HOME")
                                   .unwrap_or_else(|_| env::var("HOME").unwrap()));
     p.push("spotify_fun");
-    fs::create_dir_all(&p);
+    fs::create_dir_all(&p).ok();
     p
 }

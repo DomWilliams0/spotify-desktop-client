@@ -54,7 +54,7 @@ fn extract_cookie_value<'a>(response: &'a Response, key: &str) -> SpotifyResult<
         .ok_or_else(|| SpotifyError::AuthMissingCookie(key.to_owned()))
 }
 
-fn create_cookie(pairs: &Vec<(&str, &str)>) -> Cookie {
+fn create_cookie(pairs: &[(&str, &str)]) -> Cookie {
     Cookie(pairs.iter().map(|&(k, v)| format!("{}={}", k, v)).collect())
 }
 
@@ -158,7 +158,7 @@ impl Auth {
                               ("username", &creds.username),
                               ("password", &creds.password),
                               ("csrf_token", csrf)];
-        let login_cookies = create_cookie(&vec![(CSRF, csrf),
+        let login_cookies = create_cookie(&[(CSRF, csrf),
                                                 ("__bon",
                                                  "MHwwfDYyODMzMzc0OHwyNjM5MDAxNzQxNnwxfDF8MXww"),
                                                 ("fb_continue", &original_url),
@@ -186,7 +186,7 @@ impl Auth {
             pairs.push((CSRF, csrf.to_owned()));
             pairs
         };
-        let accept_cookies = create_cookie(&vec![("sp_ac", extract_cookie_value(&resp, "sp_ac")?),
+        let accept_cookies = create_cookie(&[("sp_ac", extract_cookie_value(&resp, "sp_ac")?),
                                                  ("sp_dc", extract_cookie_value(&resp, "sp_dc")?),
                                                  (CSRF, extract_cookie_value(&resp, CSRF)?)]);
         headers.remove::<Cookie>();
