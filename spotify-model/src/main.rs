@@ -63,7 +63,7 @@ fn init_logging() -> Result<(), log::SetLoggerError> {
                                             message))
                 })
         .level(log::LogLevelFilter::Error)
-        .level_for("rust_model", log::LogLevelFilter::Trace)
+        .level_for("spotify_model", log::LogLevelFilter::Trace)
         .chain(std::io::stderr())
         .apply()
 }
