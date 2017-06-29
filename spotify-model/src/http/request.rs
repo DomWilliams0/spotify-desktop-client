@@ -29,6 +29,7 @@ fn get_uri(endpoint: ApiEndpoint) -> &'static str {
 
 pub fn send_api_request(auth: &Auth, url: Url) -> SpotifyResult<JsonValue> {
     // TODO avoid allocation with token
+    debug!("Sending HTTP request to {:?}", url);
     let client = auth.client();
     let mut response = client
         .get(url)
