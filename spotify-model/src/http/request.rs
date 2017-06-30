@@ -113,15 +113,13 @@ impl<'a> Iterator for SeveralIterator<'a> {
     type Item = JsonValue;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.buffer
-            .pop()
-            .or_else(|| match self.fetch() {
-                         Err(e) => {
-                             warn!("Failed to get next in iterator: {:?}", e);
-                             None
-                         }
-                         _ => self.buffer.pop(),
-                     })
+        self.buffer.pop().or_else(|| match self.fetch() {
+            Err(e) => {
+                warn!("Failed to get next in iterator: {:?}", e);
+                None
+            }
+            _ => self.buffer.pop(),
+        })
     }
 }
 
@@ -145,9 +143,9 @@ impl<'a> PageIterator<'a> {
             limit: LIMIT,
             total: 0,
             next: Some({
-                           let params = [("limit", LIMIT_STR), ("offset", "0")];
-                           get_uri_with_params(endpoint, &params)?
-                       }),
+                let params = [("limit", LIMIT_STR), ("offset", "0")];
+                get_uri_with_params(endpoint, &params)?
+            }),
             buffer: Vec::with_capacity(LIMIT),
         };
 
@@ -165,17 +163,20 @@ impl<'a> PageIterator<'a> {
         let mut response = send_api_request(self.auth, url)?;
 
         self.buffer.clear();
-        self.buffer
-            .extend((response["items"]).members_mut().map(|o| o.take()));
+        self.buffer.extend((response["items"]).members_mut().map(
+            |o| o.take(),
+        ));
 
         self.total = response["total"].as_u32().unwrap();
         self.next = match response["next"] {
             JsonValue::String(ref url) => Some(Url::parse(url)?),
             _ => None,
         };
-        trace!("Next href in pagination of {} items is {:?}",
-               self.total,
-               self.next);
+        trace!(
+            "Next href in pagination of {} items is {:?}",
+            self.total,
+            self.next
+        );
 
         Ok(())
     }
@@ -185,14 +186,12 @@ impl<'a> Iterator for PageIterator<'a> {
     type Item = JsonValue;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.buffer
-            .pop()
-            .or_else(|| match self.fetch() {
-                         Err(e) => {
-                             warn!("Failed to get next in iterator: {:?}", e);
-                             None
-                         }
-                         _ => self.buffer.pop(),
-                     })
+        self.buffer.pop().or_else(|| match self.fetch() {
+            Err(e) => {
+                warn!("Failed to get next in iterator: {:?}", e);
+                None
+            }
+            _ => self.buffer.pop(),
+        })
     }
 }

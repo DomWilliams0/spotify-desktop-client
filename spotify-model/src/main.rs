@@ -44,8 +44,9 @@ fn main() {
     };
 
     let spot = Spotify::new(user, password);
-    let items = spot.fetch_saved_tracks()
-        .expect("Failed to test track fetching");
+    let items = spot.fetch_saved_tracks().expect(
+        "Failed to test track fetching",
+    );
 
     let list = &items.artists;
     info!("{} elements:", list.len());
@@ -57,11 +58,13 @@ fn main() {
 fn init_logging() -> Result<(), log::SetLoggerError> {
     fern::Dispatch::new()
         .format(|out, message, record| {
-                    out.finish(format_args!("[{}][{}] {}",
-                                            record.level(),
-                                            record.target(),
-                                            message))
-                })
+            out.finish(format_args!(
+                "[{}][{}] {}",
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
         .level(log::LogLevelFilter::Error)
         .level_for("spotify_model", log::LogLevelFilter::Trace)
         .chain(std::io::stderr())

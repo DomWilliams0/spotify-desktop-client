@@ -56,9 +56,10 @@ impl Spotify {
         let albums = SeveralIterator::new(&self.auth, ApiEndpoint::Albums, &ids)?
             .map(|mut o| {
                 // TODO parse out of strings
-                let release_date =
-                    SpotifyDate::from(o["release_date"].take_string().unwrap(),
-                                      o["release_date_precision"].take_string().unwrap());
+                let release_date = SpotifyDate::from(
+                    o["release_date"].take_string().unwrap(),
+                    o["release_date_precision"].take_string().unwrap(),
+                );
 
                 Album {
                     album_id: o["id"].take_string().unwrap(),
@@ -89,10 +90,10 @@ impl Spotify {
 
 
         Ok(SavedItems {
-               tracks: tracks,
-               albums: albums,
-               artists: artists,
-           })
+            tracks: tracks,
+            albums: albums,
+            artists: artists,
+        })
     }
 }
 
@@ -161,18 +162,19 @@ fn collect_images(mut images: JsonValue) -> Vec<Image> {
     images
         .members_mut()
         .map(move |i| {
-                 Image {
-                     width: i["width"].as_u32().unwrap(),
-                     height: i["height"].as_u32().unwrap(),
-                     url: Url::parse(i["url"].as_str().unwrap()).unwrap(),
-                 }
-             })
+            Image {
+                width: i["width"].as_u32().unwrap(),
+                height: i["height"].as_u32().unwrap(),
+                url: Url::parse(i["url"].as_str().unwrap()).unwrap(),
+            }
+        })
         .collect()
 }
 
 pub fn config_dir() -> PathBuf {
-    let mut p = PathBuf::from(env::var("XDG_CONFIG_HOME")
-                                  .unwrap_or_else(|_| env::var("HOME").unwrap()));
+    let mut p = PathBuf::from(env::var("XDG_CONFIG_HOME").unwrap_or_else(
+        |_| env::var("HOME").unwrap(),
+    ));
     p.push("spotify_fun");
     fs::create_dir_all(&p).ok();
     p
@@ -186,34 +188,45 @@ mod test {
 
     #[test]
     fn artist_collection() {
-        assert_eq!(collect_artist_ids(json::parse(ARTISTS_JSON).unwrap()),
-                   vec!["0oSGxfWSnnOXhD2fKuz2Gy", "3dBVyJ7JuOMt4GE9607Qin"]);
-        assert_eq!(collect_artist_ids(json::parse("[]").unwrap()),
-                   Vec::<String>::new());
-        assert_eq!(collect_artist_ids(json::parse("null").unwrap()),
-                   Vec::<String>::new());
+        assert_eq!(
+            collect_artist_ids(json::parse(ARTISTS_JSON).unwrap()),
+            vec!["0oSGxfWSnnOXhD2fKuz2Gy", "3dBVyJ7JuOMt4GE9607Qin"]
+        );
+        assert_eq!(
+            collect_artist_ids(json::parse("[]").unwrap()),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            collect_artist_ids(json::parse("null").unwrap()),
+            Vec::<String>::new()
+        );
     }
 
     #[test]
     fn image_collection() {
-        let expected =
-            vec![Image {
-                     width: 1000,
-                     height: 1000,
-                     url: Url::parse("https://i.scdn.co/image/32bd9707b42a2c081482ec9cd3ffa8879f659f95",)
-                         .unwrap(),
-                 },
-                 Image {
-                     width: 640,
-                     height: 640,
-                     url: Url::parse("https://i.scdn.co/image/865f24753e5e4f40a383bf24a9cdda598a4559a8",)
-                         .unwrap(),
-                 }];
+        let expected = vec![
+            Image {
+                width: 1000,
+                height: 1000,
+                url: Url::parse("https://i.scdn.co/image/32bd9707b42a2c081482ec9cd3ffa8879f659f95")
+                    .unwrap(),
+            },
+            Image {
+                width: 640,
+                height: 640,
+                url: Url::parse("https://i.scdn.co/image/865f24753e5e4f40a383bf24a9cdda598a4559a8")
+                    .unwrap(),
+            },
+        ];
         assert_eq!(collect_images(json::parse(IMAGES_JSON).unwrap()), expected);
-        assert_eq!(collect_images(json::parse("[]").unwrap()),
-                   Vec::<Image>::new());
-        assert_eq!(collect_images(json::parse("null").unwrap()),
-                   Vec::<Image>::new());
+        assert_eq!(
+            collect_images(json::parse("[]").unwrap()),
+            Vec::<Image>::new()
+        );
+        assert_eq!(
+            collect_images(json::parse("null").unwrap()),
+            Vec::<Image>::new()
+        );
     }
 
     // ugly constants

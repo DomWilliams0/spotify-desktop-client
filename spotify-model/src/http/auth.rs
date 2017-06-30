@@ -49,11 +49,10 @@ fn extract_cookie_value<'a>(headers: &'a Headers, key: &str) -> SpotifyResult<&'
     headers
         .get::<SetCookie>()
         .and_then(|&SetCookie(ref values)| {
-                      values
-                          .iter()
-                          .find(|&x| x.starts_with(key))
-                          .and_then(|c| extract_from_flattened_list(c, key, ';'))
-                  })
+            values.iter().find(|&x| x.starts_with(key)).and_then(|c| {
+                extract_from_flattened_list(c, key, ';')
+            })
+        })
         .ok_or_else(|| SpotifyError::AuthMissingCookie(key.to_owned()))
 }
 
@@ -131,16 +130,19 @@ impl Auth {
         const SCOPE: &str = "user-library-read";
 
         // initial authorise attempt
-        let query_params = vec![("client_id", String::from(SPOTIFY_CLIENT_ID)),
-                                ("response_type", String::from("token")),
-                                ("redirect_uri", String::from(REDIRECT_URI)),
-                                ("scope", String::from(SCOPE)),
-                                ("show_dialog", String::from("true"))];
+        let query_params = vec![
+            ("client_id", String::from(SPOTIFY_CLIENT_ID)),
+            ("response_type", String::from("token")),
+            ("redirect_uri", String::from(REDIRECT_URI)),
+            ("scope", String::from(SCOPE)),
+            ("show_dialog", String::from("true")),
+        ];
 
         let mut headers = {
             let mut h = Headers::new();
             h.set(UserAgent(
-                "Mozilla/5.0 (X11; Linux x86_64; rv:54.0) Gecko/20100101 Firefox/54.0".to_owned()
+                "Mozilla/5.0 (X11; Linux x86_64; rv:54.0) Gecko/20100101 Firefox/54.0"
+                    .to_owned(),
             ));
             h.set(Connection::keep_alive());
             h
@@ -157,15 +159,20 @@ impl Auth {
 
         let csrf = extract_cookie_value(resp.headers(), CSRF)?;
 
-        let login_data = vec![("remember", "false"),
-                              ("username", &creds.username),
-                              ("password", &creds.password),
-                              ("csrf_token", csrf)];
-        let login_cookies = create_cookie(&[(CSRF, csrf),
-                                            ("__bon",
-                                             "MHwwfDYyODMzMzc0OHwyNjM5MDAxNzQxNnwxfDF8MXww"),
-                                            ("fb_continue", &original_url),
-                                            ("remember", &creds.username)]);
+        let login_data = vec![
+            ("remember", "false"),
+            ("username", &creds.username),
+            ("password", &creds.password),
+            ("csrf_token", csrf),
+        ];
+        let login_cookies = create_cookie(
+            &[
+                (CSRF, csrf),
+                ("__bon", "MHwwfDYyODMzMzc0OHwyNjM5MDAxNzQxNnwxfDF8MXww"),
+                ("fb_continue", &original_url),
+                ("remember", &creds.username),
+            ],
+        );
 
         headers.set(Referer(original_url.clone()));
         headers.set(login_cookies);
@@ -189,10 +196,13 @@ impl Auth {
             pairs.push((CSRF, csrf.to_owned()));
             pairs
         };
-        let accept_cookies =
-            create_cookie(&[("sp_ac", extract_cookie_value(resp.headers(), "sp_ac")?),
-                            ("sp_dc", extract_cookie_value(resp.headers(), "sp_dc")?),
-                            (CSRF, extract_cookie_value(resp.headers(), CSRF)?)]);
+        let accept_cookies = create_cookie(
+            &[
+                ("sp_ac", extract_cookie_value(resp.headers(), "sp_ac")?),
+                ("sp_dc", extract_cookie_value(resp.headers(), "sp_dc")?),
+                (CSRF, extract_cookie_value(resp.headers(), CSRF)?),
+            ],
+        );
         headers.remove::<Cookie>();
         headers.set(accept_cookies);
 
@@ -212,9 +222,9 @@ impl Auth {
                 match (e, t) {
                     (Some(e), Some(t)) => {
                         Some(AuthState {
-                                 token: t.to_owned(),
-                                 expiry_time: time::get_time().sec + e.parse::<i64>().unwrap(),
-                             })
+                            token: t.to_owned(),
+                            expiry_time: time::get_time().sec + e.parse::<i64>().unwrap(),
+                        })
                     }
                     _ => None,
                 }
@@ -278,23 +288,22 @@ mod filecache {
 
         let mut token = String::new();
         let mut expiry = String::new();
-        reader
-            .read_line(&mut token)
-            .map_err(|_| SpotifyError::BadTokenCache("Token missing"))?;
-        reader
-            .read_line(&mut expiry)
-            .map_err(|_| SpotifyError::BadTokenCache("Expiry time missing"))?;
+        reader.read_line(&mut token).map_err(|_| {
+            SpotifyError::BadTokenCache("Token missing")
+        })?;
+        reader.read_line(&mut expiry).map_err(|_| {
+            SpotifyError::BadTokenCache("Expiry time missing")
+        })?;
 
         // remove new lines
         trim_in_place(&mut token);
         trim_in_place(&mut expiry);
         Ok(auth::AuthState {
-               token: token,
-               expiry_time:
-                   expiry
-                       .parse()
-                       .map_err(|_| SpotifyError::BadTokenCache("Expiry time is not a number"))?,
-           })
+            token: token,
+            expiry_time: expiry.parse().map_err(|_| {
+                SpotifyError::BadTokenCache("Expiry time is not a number")
+            })?,
+        })
     }
 
 
@@ -310,12 +319,18 @@ mod test {
     fn flattened_list_extraction() {
         const URL: &'static str = "http://localhost:8080#banana=good&big-scary-dogs=bad&boris=johnson";
 
-        assert_eq!(extract_from_flattened_list(URL, "banana", '&'),
-                   Some("good"));
-        assert_eq!(extract_from_flattened_list(URL, "big-scary-dogs", '&'),
-                   Some("bad"));
-        assert_eq!(extract_from_flattened_list(URL, "boris", '&'),
-                   Some("johnson"));
+        assert_eq!(
+            extract_from_flattened_list(URL, "banana", '&'),
+            Some("good")
+        );
+        assert_eq!(
+            extract_from_flattened_list(URL, "big-scary-dogs", '&'),
+            Some("bad")
+        );
+        assert_eq!(
+            extract_from_flattened_list(URL, "boris", '&'),
+            Some("johnson")
+        );
         assert_eq!(extract_from_flattened_list(URL, "nonexistent", '&'), None);
 
         assert_eq!(extract_from_flattened_list("", "", ' '), None);
@@ -326,7 +341,9 @@ mod test {
     fn cookie_extraction() {
         let headers = {
             let mut h = Headers::new();
-            h.set(SetCookie(vec!["test=message; Path=/; SomethingElse=lala".to_owned()]));
+            h.set(SetCookie(
+                vec!["test=message; Path=/; SomethingElse=lala".to_owned()],
+            ));
             h
         };
 
