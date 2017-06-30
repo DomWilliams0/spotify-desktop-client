@@ -53,7 +53,7 @@ fn extract_cookie_value<'a>(headers: &'a Headers, key: &str) -> SpotifyResult<&'
                 extract_from_flattened_list(c, key, ';')
             })
         })
-        .ok_or_else(|| SpotifyError::AuthMissingCookie(key.to_owned()))
+        .ok_or_else(|| ErrorKind::AuthMissingCookie(key.to_owned()).into())
 }
 
 fn create_cookie(pairs: &[(&str, &str)]) -> Cookie {
@@ -105,7 +105,13 @@ impl Auth {
             // try to load from file
             {
                 let mut state = self.state.borrow_mut();
-                *state = Auth::load().ok(); // ignore error
+                *state = {
+                    let res = Auth::load();
+                    if let Err(ref e) = res {
+                        debug!("Failed to load token from file: {}", e);
+                    }
+                    res.ok() // ignore error
+                };
             }
             if !self.is_state_valid() {
                 {
@@ -185,7 +191,7 @@ impl Auth {
             .send()?;
 
         if !resp.status().is_success() {
-            return Err(SpotifyError::AuthBadCreds);
+            bail!(ErrorKind::AuthBadCreds);
         }
 
         debug!("Authenticated!");
@@ -229,13 +235,13 @@ impl Auth {
                     _ => None,
                 }
             })
-            .ok_or(SpotifyError::AuthFailedAccept)
+            .ok_or_else(|| ErrorKind::AuthFailedAccept.into())
     }
 
     fn save(&self) -> SpotifyResult<()> {
         match *self.state.borrow() {
             Some(ref state) => filecache::save(state),
-            None => Err(SpotifyError::BadTokenCache("No token to cache")),
+            None => Err(ErrorKind::BadTokenCache("No token to cache").into()),
         }
     }
 
@@ -288,11 +294,11 @@ mod filecache {
 
         let mut token = String::new();
         let mut expiry = String::new();
-        reader.read_line(&mut token).map_err(|_| {
-            SpotifyError::BadTokenCache("Token missing")
+        reader.read_line(&mut token).chain_err(|| {
+            ErrorKind::BadTokenCache("Token missing")
         })?;
-        reader.read_line(&mut expiry).map_err(|_| {
-            SpotifyError::BadTokenCache("Expiry time missing")
+        reader.read_line(&mut expiry).chain_err(|| {
+            ErrorKind::BadTokenCache("Expiry time missing")
         })?;
 
         // remove new lines
@@ -300,8 +306,8 @@ mod filecache {
         trim_in_place(&mut expiry);
         Ok(auth::AuthState {
             token: token,
-            expiry_time: expiry.parse().map_err(|_| {
-                SpotifyError::BadTokenCache("Expiry time is not a number")
+            expiry_time: expiry.parse().chain_err(|| {
+                ErrorKind::BadTokenCache("Expiry time is not a number")
             })?,
         })
     }
@@ -313,7 +319,6 @@ mod filecache {
 mod test {
     use http::auth::*;
     use reqwest::header::{Headers, SetCookie, Cookie};
-    use error::SpotifyError;
 
     #[test]
     fn flattened_list_extraction() {
@@ -349,7 +354,7 @@ mod test {
 
         assert_eq!(extract_cookie_value(&headers, "test").ok(), Some("message"));
         match extract_cookie_value(&headers, "nonexistent") {
-            Err(SpotifyError::AuthMissingCookie(_)) => (),
+            Err(Error(ErrorKind::AuthMissingCookie(_), _)) => (),
             _ => assert!(false, "Error not returned"),
         }
     }

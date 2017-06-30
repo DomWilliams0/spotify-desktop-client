@@ -16,7 +16,7 @@ pub enum ApiEndpoint {
 }
 
 fn get_uri_with_params(endpoint: ApiEndpoint, params: &[(&str, &str)]) -> SpotifyResult<Url> {
-    Url::parse_with_params(get_uri(endpoint), params).map_err(SpotifyError::Url)
+    Url::parse_with_params(get_uri(endpoint), params).chain_err(|| "Failed to parse uri")
 }
 
 fn get_uri(endpoint: ApiEndpoint) -> &'static str {
@@ -37,7 +37,7 @@ pub fn send_api_request(auth: &Auth, url: Url) -> SpotifyResult<JsonValue> {
         .send()?;
 
     if !response.status().is_success() {
-        return Err(SpotifyError::BadResponseStatusCode(*response.status()));
+        bail!(ErrorKind::BadResponseStatusCode(*response.status()));
     }
 
     // TODO use etag header for caching

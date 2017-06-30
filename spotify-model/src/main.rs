@@ -1,10 +1,14 @@
 #![allow(dead_code)]
+#![recursion_limit = "1024"]
 
 extern crate time;
 extern crate reqwest;
 extern crate url;
 extern crate json;
 extern crate fern;
+
+#[macro_use]
+extern crate error_chain;
 
 #[macro_use]
 extern crate log;
@@ -14,12 +18,30 @@ mod http;
 mod error;
 
 use spotify::Spotify;
+use error::*;
 
 fn main() {
-    if let Err(e) = init_logging() {
-        println!("Failed to init logging: {:?}", e);
-        std::process::exit(1);
+    if let Err(ref e) = run() {
+        use std::io::Write;
+        let stderr = &mut ::std::io::stderr();
+        let errmsg = "Error writing to stderr";
+
+        writeln!(stderr, "error: {}", e).expect(errmsg);
+
+        for e in e.iter().skip(1) {
+            writeln!(stderr, "caused by: {}", e).expect(errmsg);
+        }
+
+        if let Some(backtrace) = e.backtrace() {
+            writeln!(stderr, "backtrace: {:?}", backtrace).expect(errmsg);
+        }
+
+        ::std::process::exit(1);
     }
+}
+
+fn run() -> SpotifyResult<()> {
+    init_logging()?;
 
     // temporarily read creds from environment
     const CRED_ENV: &str = "SPOTIFY_CREDS";
@@ -44,18 +66,19 @@ fn main() {
     };
 
     let spot = Spotify::new(user, password);
-    let items = spot.fetch_saved_tracks().expect(
-        "Failed to test track fetching",
-    );
+    let items = spot.fetch_saved_tracks().chain_err(
+        || "Failed to fetch saved tracks",
+    )?;
 
     let list = &items.artists;
     info!("{} elements:", list.len());
     for t in list {
         info!("{:?}", t);
     }
+    Ok(())
 }
 
-fn init_logging() -> Result<(), log::SetLoggerError> {
+fn init_logging() -> SpotifyResult<()> {
     fern::Dispatch::new()
         .format(|out, message, record| {
             out.finish(format_args!(
@@ -69,4 +92,5 @@ fn init_logging() -> Result<(), log::SetLoggerError> {
         .level_for("spotify_model", log::LogLevelFilter::Trace)
         .chain(std::io::stderr())
         .apply()
+        .chain_err(|| "Failed to init logging")
 }
